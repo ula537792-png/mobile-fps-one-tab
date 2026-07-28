@@ -144,7 +144,7 @@ local function getBestTarget()
     return bestTarget
 end
 
--- Безопасная авто-стрельба для мобильных устройств
+-- Авто-стрельба через штатную кнопку мобильного интерфейса игры
 task.spawn(function()
     while true do
         task.wait(Settings.AutoShootDelay)
@@ -158,10 +158,21 @@ task.spawn(function()
                 
                 if canShoot then
                     pcall(function()
-                        if mouse1press then
-                            mouse1press()
-                            task.wait(0.02)
-                            mouse1release()
+                        local attackBtn = player.PlayerGui:FindFirstChild("MobileButtons")
+                        if attackBtn then
+                            attackBtn = attackBtn:FindFirstChild("Buttons")
+                            if attackBtn then
+                                attackBtn = attackBtn:FindFirstChild("Attack")
+                                if attackBtn then
+                                    -- Вызываем событие клика/тапа по кнопке игры
+                                    for _, connection in ipairs(getconnections(attackBtn.MouseButton1Click)) do
+                                        connection:Fire()
+                                    end
+                                    for _, connection in ipairs(getconnections(attackBtn.Activated)) do
+                                        connection:Fire()
+                                    end
+                                end
+                            end
                         end
                     end)
                 end
