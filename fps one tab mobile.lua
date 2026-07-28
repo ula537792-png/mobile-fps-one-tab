@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
 local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
@@ -246,6 +247,15 @@ joystickBase.InputBegan:Connect(function(input)
             joystickActive = true
             joystickInputObject = input
             joystickCenter = joystickBase.AbsolutePosition + (joystickBase.AbsoluteSize / 2)
+            
+            ContextActionService:BindActionAtPriority(
+                "BlockCameraRotation",
+                function() return Enum.ContextActionResult.Sink end,
+                false,
+                Enum.ContextActionPriority.High.Value,
+                Enum.UserInputType.MouseMovement,
+                Enum.UserInputType.Touch
+            )
         end
     end
 end)
@@ -256,6 +266,8 @@ UserInputService.InputEnded:Connect(function(input)
         joystickInputObject = nil
         moveVector = Vector3.zero
         TweenService:Create(joystickKnob, TweenInfo.new(0.1), {Position = UDim2.new(0.5, -30, 0.5, -30)}):Play()
+        
+        ContextActionService:UnbindAction("BlockCameraRotation")
     end
 end)
 
@@ -279,7 +291,6 @@ UserInputService.InputChanged:Connect(function(input)
         else
             local filteredAlpha = (alpha - deadzone) / (1 - deadzone)
             local norm = delta.Unit * filteredAlpha
-            -- Исправлена инверсия: ось Y инвертирована, чтобы вверх джойстика вел вперед по камере
             moveVector = Vector3.new(norm.X, 0, -norm.Y)
         end
     end
@@ -301,28 +312,6 @@ RunService.RenderStepped:Connect(function()
             else
                 humanoid:Move(Vector3.zero, true)
             end
-        end
-    end
-end)
-
--- Глобальное перехватывание касаний внутри зоны джойстика для полного подавления вращения камеры движком Roblox
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if Settings.Enabled.CustomControls and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) then
-        local pos = input.Position
-        local absPos = joystickBase.AbsolutePosition
-        local absSize = joystickBase.AbsoluteSize
-        
-        if pos.X >= absPos.X - 40 and pos.X <= absPos.X + absSize.X + 40 and
-           pos.Y >= absPos.Y - 40 and pos.Y <= absPos.Y + absSize.Y + 40 then
-            input.UserInputType = Enum.UserInputType.Focus -- сбиваем стандартный обработчик камеры роброкса
-        end
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if Settings.Enabled.CustomControls and joystickActive and joystickInputObject then
-        if input == joystickInputObject then
-            input.Position = Vector3.new(joystickCenter.X, joystickCenter.Y, 0)
         end
     end
 end)
@@ -396,28 +385,30 @@ makeDraggable(attackBtn)
 task.spawn(function()
     while true do
         task.wait(0.5)
-        pcall(function()
-            local controls = player.PlayerScripts:FindFirstChild("PlayerModule")
-            if controls then
-                local modules = require(controls)
-                local controlsModule = modules:GetControls()
-                if controlsModule and controlsModule.Disable then 
-                    controlsModule:Disable() 
+        if Settings.CustomControlsActive then
+            pcall(function()
+                local controls = player.PlayerScripts:FindFirstChild("PlayerModule")
+                if controls then
+                    local modules = require(controls)
+                    local controlsModule = modules:GetControls()
+                    if controlsModule and controlsModule.Disable then 
+                        controlsModule:Disable() 
+                    end
                 end
-            end
-            
-            for _, gui in ipairs(player.PlayerGui:GetChildren()) do
-                if gui:IsA("ScreenGui") then
-                    local nameLower = string.lower(gui.Name)
-                    if string.find(nameLower, "touch") or string.find(nameLower, "control") or string.find(nameLower, "mobile") or string.find(nameLower, "context") or string.find(nameLower, "combat") or string.find(nameLower, "hotbar") or string.find(nameLower, "joystick") then
-                        if gui ~= customControlsGui and gui ~= screenGui then
-                            gui.Enabled = false
-                            gui:Destroy()
+                
+                for _, gui in ipairs(player.PlayerGui:GetChildren()) do
+                    if gui:IsA("ScreenGui") then
+                        local nameLower = string.lower(gui.Name)
+                        if string.find(nameLower, "touch") or string.find(nameLower, "control") or string.find(nameLower, "mobile") or string.find(nameLower, "context") or string.find(nameLower, "combat") or string.find(nameLower, "hotbar") or string.find(nameLower, "joystick") then
+                            if gui ~= customControlsGui and gui ~= screenGui then
+                                gui.Enabled = false
+                                gui:Destroy()
+                            end
                         end
                     end
                 end
-            end
-        end)
+            end)
+        end
     end
 end)
 
