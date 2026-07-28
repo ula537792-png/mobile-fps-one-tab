@@ -355,13 +355,28 @@ makeDraggable(attackBtn)
 
 local function toggleDefaultControls(state)
     pcall(function()
-        local touchGui = player.PlayerGui:FindFirstChild("TouchGui")
-        if touchGui then
-            touchGui.Enabled = not state
+        local controls = player.PlayerScripts:FindFirstChild("PlayerModule")
+        if controls then
+            local modules = require(controls)
+            local controlsModule = modules:GetControls()
+            if controlsModule then
+                if state then
+                    controlsModule:Disable()
+                else
+                    controlsModule:Enable()
+                end
+            end
         end
-        local mobileButtons = player.PlayerGui:FindFirstChild("MobileButtons")
-        if mobileButtons then
-            mobileButtons.Enabled = not state
+        
+        for _, gui in ipairs(player.PlayerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") then
+                local nameLower = string.lower(gui.Name)
+                if string.find(nameLower, "touch") or string.find(nameLower, "control") or string.find(nameLower, "mobile") or string.find(nameLower, "context") then
+                    if gui ~= customControlsGui and gui ~= screenGui then
+                        gui.Enabled = not state
+                    end
+                end
+            end
         end
     end)
 end
