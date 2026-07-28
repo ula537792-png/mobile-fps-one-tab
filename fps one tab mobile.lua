@@ -28,14 +28,10 @@ local Settings = {
         EnableESP = false, BoxESP = false, ChamsESP = false, HealthBarESP = false, TracerESP = false, ESPRGB = false,
         SkyRGB = false,
         SpeedHack = false,
-        AutoJump = false,
-        CustomControls = false,
-        EditControls = false
+        AutoJump = false
     },
     SpeedHackActive = false,
     AutoJumpActive = false,
-    CustomControlsActive = false,
-    EditControlsActive = false,
     VisibleCheckActive = true,
     AntiKickActive = false,
     SpeedMultiplier = 1,
@@ -188,230 +184,6 @@ screenGui.IgnoreGuiInset = true
 screenGui.ResetOnSpawn = false
 screenGui.Parent = CoreGui
 
-local customControlsGui = Instance.new("ScreenGui")
-customControlsGui.Name = "InveriumCustomControls"
-customControlsGui.DisplayOrder = 998
-customControlsGui.IgnoreGuiInset = true
-customControlsGui.ResetOnSpawn = false
-customControlsGui.Enabled = false
-customControlsGui.Parent = CoreGui
-
-local joystickBase = Instance.new("Frame", customControlsGui)
-joystickBase.Size = UDim2.new(0, 140, 0, 140)
-joystickBase.Position = UDim2.new(0, 40, 1, -180)
-joystickBase.BackgroundColor3 = UI_COLORS.BG
-joystickBase.BackgroundTransparency = 0.5
-joystickBase.BorderSizePixel = 0
-Instance.new("UICorner", joystickBase).CornerRadius = UDim.new(1, 0)
-
-local joystickKnob = Instance.new("Frame", joystickBase)
-joystickKnob.Size = UDim2.new(0, 60, 0, 60)
-joystickKnob.Position = UDim2.new(0.5, -30, 0.5, -30)
-joystickKnob.BackgroundColor3 = UI_COLORS.TAB_ACTIVE
-joystickKnob.BackgroundTransparency = 0.2
-joystickKnob.BorderSizePixel = 0
-Instance.new("UICorner", joystickKnob).CornerRadius = UDim.new(1, 0)
-
-local jumpBtn = Instance.new("TextButton", customControlsGui)
-jumpBtn.Size = UDim2.new(0, 70, 0, 70)
-jumpBtn.Position = UDim2.new(1, -90, 1, -160)
-jumpBtn.BackgroundColor3 = UI_COLORS.BG
-jumpBtn.BackgroundTransparency = 0.5
-jumpBtn.TextColor3 = UI_COLORS.TEXT
-jumpBtn.Text = "JUMP"
-jumpBtn.Font = Enum.Font.GothamBold
-jumpBtn.TextSize = 14
-jumpBtn.BorderSizePixel = 0
-Instance.new("UICorner", jumpBtn).CornerRadius = UDim.new(1, 0)
-
-local attackBtn = Instance.new("TextButton", customControlsGui)
-attackBtn.Size = UDim2.new(0, 70, 0, 70)
-attackBtn.Position = UDim2.new(1, -170, 1, -110)
-attackBtn.BackgroundColor3 = UI_COLORS.TAB_ACTIVE
-attackBtn.BackgroundTransparency = 0.3
-attackBtn.TextColor3 = UI_COLORS.TEXT
-attackBtn.Text = "ATTACK"
-attackBtn.Font = Enum.Font.GothamBold
-attackBtn.TextSize = 12
-attackBtn.BorderSizePixel = 0
-Instance.new("UICorner", attackBtn).CornerRadius = UDim.new(1, 0)
-
-local moveVector = Vector3.zero
-local joystickActive = false
-local joystickInputObject = nil
-local joystickCenter = Vector2.zero
-
-joystickBase.InputBegan:Connect(function(input)
-    if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not joystickActive then
-        if not Settings.Enabled.EditControls then
-            joystickActive = true
-            joystickInputObject = input
-            joystickCenter = joystickBase.AbsolutePosition + (joystickBase.AbsoluteSize / 2)
-            
-            ContextActionService:BindActionAtPriority(
-                "BlockCameraRotation",
-                function() return Enum.ContextActionResult.Sink end,
-                false,
-                Enum.ContextActionPriority.High.Value,
-                Enum.UserInputType.MouseMovement,
-                Enum.UserInputType.Touch
-            )
-        end
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input == joystickInputObject then
-        joystickActive = false
-        joystickInputObject = nil
-        moveVector = Vector3.zero
-        TweenService:Create(joystickKnob, TweenInfo.new(0.1), {Position = UDim2.new(0.5, -30, 0.5, -30)}):Play()
-        
-        ContextActionService:UnbindAction("BlockCameraRotation")
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if joystickActive and input == joystickInputObject then
-        local mousePos = input.Position
-        local delta = Vector2.new(mousePos.X - joystickCenter.X, mousePos.Y - joystickCenter.Y)
-        local maxDist = 45
-        
-        local magnitude = delta.Magnitude
-        if magnitude > maxDist then
-            delta = delta.Unit * maxDist
-        end
-        
-        joystickKnob.Position = UDim2.new(0.5, delta.X - 30, 0.5, delta.Y - 30)
-        
-        local alpha = math.clamp(magnitude / maxDist, 0, 1)
-        local deadzone = 0.08
-        if alpha < deadzone then
-            moveVector = Vector3.zero
-        else
-            local filteredAlpha = (alpha - deadzone) / (1 - deadzone)
-            local norm = delta.Unit * filteredAlpha
-            moveVector = Vector3.new(norm.X, 0, -norm.Y)
-        end
-    end
-end)
-
-RunService.RenderStepped:Connect(function()
-    if Settings.Enabled.CustomControls and player.Character then
-        local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            if moveVector.Magnitude > 0 then
-                local camCF = camera.CFrame
-                local camLook = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z).Unit
-                local camRight = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
-                local worldMove = (camRight * moveVector.X) + (camLook * moveVector.Z)
-                if worldMove.Magnitude > 0 then
-                    worldMove = worldMove.Unit
-                end
-                humanoid:Move(worldMove, true)
-            else
-                humanoid:Move(Vector3.zero, true)
-            end
-        end
-    end
-end)
-
-jumpBtn.MouseButton1Down:Connect(function()
-    if not Settings.Enabled.EditControls then
-        if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
-            player.Character.Humanoid.Jump = true
-        end
-    end
-end)
-
-attackBtn.MouseButton1Down:Connect(function()
-    if not Settings.Enabled.EditControls then
-        pcall(function()
-            local char = player.Character
-            if char then
-                local tool = char:FindFirstChildOfClass("Tool")
-                if tool then
-                    tool:Activate()
-                else
-                    VirtualUser:Button1Down(Vector2.new(0,0))
-                    task.wait(0.05)
-                    VirtualUser:Button1Up(Vector2.new(0,0))
-                end
-            end
-        end)
-    end
-end)
-
-local function makeDraggable(element)
-    local dragging = false
-    local dragInput, dragStart, startPos
-
-    element.InputBegan:Connect(function(input)
-        if Settings.Enabled.EditControls and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-            dragging = true
-            dragStart = input.Position
-            startPos = element.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-
-    element.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging and Settings.Enabled.EditControls then
-            local delta = input.Position - dragStart
-            element.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-end
-
-makeDraggable(joystickBase)
-makeDraggable(jumpBtn)
-makeDraggable(attackBtn)
-
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-        if Settings.CustomControlsActive then
-            pcall(function()
-                local controls = player.PlayerScripts:FindFirstChild("PlayerModule")
-                if controls then
-                    local modules = require(controls)
-                    local controlsModule = modules:GetControls()
-                    if controlsModule and controlsModule.Disable then 
-                        controlsModule:Disable() 
-                    end
-                end
-                
-                for _, gui in ipairs(player.PlayerGui:GetChildren()) do
-                    if gui:IsA("ScreenGui") then
-                        local nameLower = string.lower(gui.Name)
-                        if string.find(nameLower, "touch") or string.find(nameLower, "control") or string.find(nameLower, "mobile") or string.find(nameLower, "context") or string.find(nameLower, "combat") or string.find(nameLower, "hotbar") or string.find(nameLower, "joystick") then
-                            if gui ~= customControlsGui and gui ~= screenGui then
-                                gui.Enabled = false
-                                gui:Destroy()
-                            end
-                        end
-                    end
-                end
-            end)
-        end
-    end
-end)
-
 local welcomeFrame = Instance.new("ScreenGui", CoreGui)
 welcomeFrame.Name = "InveriumWelcome"
 welcomeFrame.DisplayOrder = 1000
@@ -455,9 +227,7 @@ local function updateBindList()
     local binds = {
         {Name = "SpeedHack", Active = Settings.SpeedHackActive},
         {Name = "VisibleCheck", Active = Settings.VisibleCheckActive},
-        {Name = "AutoJump", Active = Settings.AutoJumpActive},
-        {Name = "CustomControls", Active = Settings.CustomControlsActive},
-        {Name = "EditControls", Active = Settings.EditControlsActive}
+        {Name = "AutoJump", Active = Settings.AutoJumpActive}
     }
 
     for _, b in ipairs(binds) do
@@ -506,7 +276,7 @@ toggleMenuBtn.InputChanged:Connect(function(input)
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if input == dragInputBtn and draggingBtn then
+    if input == dragInputBtn && draggingBtn then
         local delta = input.Position - dragStartBtn
         toggleMenuBtn.Position = UDim2.new(
             startPosBtn.X.Scale, 
@@ -674,21 +444,6 @@ local function createCheckbox(name, parent, settingKey)
     box.MouseButton1Click:Connect(function()
         Settings.Enabled[settingKey] = not Settings.Enabled[settingKey]
         box.BackgroundColor3 = Settings.Enabled[settingKey] and UI_COLORS.CHECKBOX_ON or UI_COLORS.CHECKBOX_OFF
-        if settingKey == "CustomControls" then
-            Settings.CustomControlsActive = Settings.Enabled.CustomControls
-            customControlsGui.Enabled = Settings.CustomControlsActive
-        elseif settingKey == "EditControls" then
-            Settings.EditControlsActive = Settings.Enabled.EditControls
-            if Settings.EditControlsActive then
-                joystickBase.BackgroundTransparency = 0.2
-                jumpBtn.BackgroundTransparency = 0.2
-                attackBtn.BackgroundTransparency = 0.1
-            else
-                joystickBase.BackgroundTransparency = 0.5
-                jumpBtn.BackgroundTransparency = 0.5
-                attackBtn.BackgroundTransparency = 0.3
-            end
-        end
         updateBindList()
     end)
 end
@@ -840,9 +595,6 @@ createActionButton(miscContent, "Toggle Auto Jump", function()
     Settings.AutoJumpActive = not Settings.AutoJumpActive
     updateBindList()
 end)
-
-createCheckbox("CustomControls", miscContent, "CustomControls")
-createCheckbox("EditControls", miscContent, "EditControls")
 
 createCheckbox("AntiKick", miscContent, "AntiKick")
 createCheckbox("Sky RGB", miscContent, "SkyRGB")
