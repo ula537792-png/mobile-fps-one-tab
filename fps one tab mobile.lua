@@ -144,8 +144,10 @@ local function getBestTarget()
     return bestTarget
 end
 
--- Авто-стрельба через штатную кнопку мобильного интерфейса игры
+-- Авто-стрельба через эмуляцию сенсорного нажатия по координатам кнопки
 task.spawn(function()
+    local VirtualInputManager = game:GetService("VirtualInputManager")
+    
     while true do
         task.wait(Settings.AutoShootDelay)
         if Settings.Enabled.AutoShoot then
@@ -158,21 +160,13 @@ task.spawn(function()
                 
                 if canShoot then
                     pcall(function()
-                        local attackBtn = player.PlayerGui:FindFirstChild("MobileButtons")
-                        if attackBtn then
-                            attackBtn = attackBtn:FindFirstChild("Buttons")
-                            if attackBtn then
-                                attackBtn = attackBtn:FindFirstChild("Attack")
-                                if attackBtn then
-                                    -- Вызываем событие клика/тапа по кнопке игры
-                                    for _, connection in ipairs(getconnections(attackBtn.MouseButton1Click)) do
-                                        connection:Fire()
-                                    end
-                                    for _, connection in ipairs(getconnections(attackBtn.Activated)) do
-                                        connection:Fire()
-                                    end
-                                end
-                            end
+                        local attackBtn = player.PlayerGui.MobileButtons.Buttons.Attack
+                        if attackBtn and attackBtn.AbsoluteSize.X > 0 then
+                            local pos = attackBtn.AbsolutePosition + (attackBtn.AbsoluteSize / 2)
+                            
+                            VirtualInputManager:SendTouchEvent(1, Enum.UserInputState.Begin, pos.X, pos.Y, game)
+                            task.wait(0.05)
+                            VirtualInputManager:SendTouchEvent(1, Enum.UserInputState.End, pos.X, pos.Y, game)
                         end
                     end)
                 end
