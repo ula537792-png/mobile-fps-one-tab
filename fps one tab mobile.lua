@@ -4,6 +4,7 @@ local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
+local GuiService = game:GetService("GuiService")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -144,10 +145,8 @@ local function getBestTarget()
     return bestTarget
 end
 
--- Авто-стрельба через эмуляцию сенсорного нажатия по координатам кнопки
+-- Авто-стрельба через прямой вызов тапа по мобильной кнопке
 task.spawn(function()
-    local VirtualInputManager = game:GetService("VirtualInputManager")
-    
     while true do
         task.wait(Settings.AutoShootDelay)
         if Settings.Enabled.AutoShoot then
@@ -161,12 +160,15 @@ task.spawn(function()
                 if canShoot then
                     pcall(function()
                         local attackBtn = player.PlayerGui.MobileButtons.Buttons.Attack
-                        if attackBtn and attackBtn.AbsoluteSize.X > 0 then
+                        if attackBtn then
                             local pos = attackBtn.AbsolutePosition + (attackBtn.AbsoluteSize / 2)
-                            
-                            VirtualInputManager:SendTouchEvent(1, Enum.UserInputState.Begin, pos.X, pos.Y, game)
-                            task.wait(0.05)
-                            VirtualInputManager:SendTouchEvent(1, Enum.UserInputState.End, pos.X, pos.Y, game)
+                            if firetouchtap then
+                                firetouchtap(pos.X, pos.Y, 0)
+                            elseif pcall(function() return attackBtn.Activated end) then
+                                for _, connection in ipairs(getconnections(attackBtn.Activated)) do
+                                    connection:Fire()
+                                end
+                            end
                         end
                     end)
                 end
