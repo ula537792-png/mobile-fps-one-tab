@@ -5,7 +5,7 @@ local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local GuiService = game:GetService("GuiService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
+local VirtualUser = game:GetService("VirtualUser")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -28,10 +28,12 @@ local Settings = {
         EnableESP = false, BoxESP = false, ChamsESP = false, HealthBarESP = false, TracerESP = false, ESPRGB = false,
         SkyRGB = false,
         SpeedHack = false,
-        AutoJump = false
+        AutoJump = false,
+        CustomControls = false
     },
     SpeedHackActive = false,
     AutoJumpActive = false,
+    CustomControlsActive = false,
     VisibleCheckActive = true,
     AntiKickActive = false,
     SpeedMultiplier = 1,
@@ -146,7 +148,7 @@ local function getBestTarget()
     return bestTarget
 end
 
--- Авто-стрельба через VirtualInputManager
+-- Авто-стрельба как на ПК (эмуляция клика мыши по инструменту)
 task.spawn(function()
     while true do
         task.wait(Settings.AutoShootDelay)
@@ -160,19 +162,16 @@ task.spawn(function()
                 
                 if canShoot then
                     pcall(function()
-                        local attackBtn = player.PlayerGui:FindFirstChild("MobileButtons")
-                        if attackBtn then
-                            attackBtn = attackBtn:FindFirstChild("Buttons")
-                            if attackBtn then
-                                attackBtn = attackBtn:FindFirstChild("Attack")
+                        local char = player.Character
+                        if char then
+                            local tool = char:FindFirstChildOfClass("Tool")
+                            if tool then
+                                tool:Activate()
+                            else
+                                VirtualUser:Button1Down(Vector2.new(0,0))
+                                task.wait(0.05)
+                                VirtualUser:Button1Up(Vector2.new(0,0))
                             end
-                        end
-                        
-                        if attackBtn and attackBtn.AbsoluteSize.X > 0 then
-                            local pos = attackBtn.AbsolutePosition + (attackBtn.AbsoluteSize / 2)
-                            VirtualInputManager:SendTouchEvent(1, pos.X, pos.Y, game)
-                            task.wait(0.05)
-                            VirtualInputManager:SendTouchEvent(1, pos.X, pos.Y, game)
                         end
                     end)
                 end
@@ -187,6 +186,125 @@ screenGui.DisplayOrder = 999
 screenGui.IgnoreGuiInset = true
 screenGui.ResetOnSpawn = false
 screenGui.Parent = CoreGui
+
+-- Кастомное управление (джойстик, прыжок, атака)
+local customControlsGui = Instance.new("ScreenGui")
+customControlsGui.Name = "InveriumCustomControls"
+customControlsGui.DisplayOrder = 998
+customControlsGui.IgnoreGuiInset = true
+customControlsGui.ResetOnSpawn = false
+customControlsGui.Enabled = false
+customControlsGui.Parent = CoreGui
+
+local joystickBase = Instance.new("Frame", customControlsGui)
+joystickBase.Size = UDim2.new(0, 120, 0, 120)
+joystickBase.Position = UDim2.new(0, 40, 1, -160)
+joystickBase.BackgroundColor3 = UI_COLORS.BG
+joystickBase.BackgroundTransparency = 0.5
+joystickBase.BorderSizePixel = 0
+Instance.new("UICorner", joystickBase).CornerRadius = UDim.new(1, 0)
+
+local joystickKnob = Instance.new("Frame", joystickBase)
+joystickKnob.Size = UDim2.new(0, 50, 0, 50)
+joystickKnob.Position = UDim2.new(0.5, -25, 0.5, -25)
+joystickKnob.BackgroundColor3 = UI_COLORS.TAB_ACTIVE
+joystickKnob.BackgroundTransparency = 0.2
+joystickKnob.BorderSizePixel = 0
+Instance.new("UICorner", joystickKnob).CornerRadius = UDim.new(1, 0)
+
+local jumpBtn = Instance.new("TextButton", customControlsGui)
+jumpBtn.Size = UDim2.new(0, 70, 0, 70)
+jumpBtn.Position = UDim2.new(1, -90, 1, -160)
+jumpBtn.BackgroundColor3 = UI_COLORS.BG
+jumpBtn.BackgroundTransparency = 0.5
+jumpBtn.TextColor3 = UI_COLORS.TEXT
+jumpBtn.Text = "JUMP"
+jumpBtn.Font = Enum.Font.GothamBold
+jumpBtn.TextSize = 14
+jumpBtn.BorderSizePixel = 0
+Instance.new("UICorner", jumpBtn).CornerRadius = UDim.new(1, 0)
+
+local attackBtn = Instance.new("TextButton", customControlsGui)
+attackBtn.Size = UDim2.new(0, 70, 0, 70)
+attackBtn.Position = UDim2.new(1, -170, 1, -110)
+attackBtn.BackgroundColor3 = UI_COLORS.TAB_ACTIVE
+attackBtn.BackgroundTransparency = 0.3
+attackBtn.TextColor3 = UI_COLORS.TEXT
+attackBtn.Text = "ATTACK"
+attackBtn.Font = Enum.Font.GothamBold
+attackBtn.TextSize = 12
+attackBtn.BorderSizePixel = 0
+Instance.new("UICorner", attackBtn).CornerRadius = UDim.new(1, 0)
+
+local moveVector = Vector3.zero
+local joystickActive = false
+local joystickInputObject = nil
+
+joystickBase.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        joystickActive = true
+        joystickInputObject = input
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input == joystickInputObject then
+        joystickActive = false
+        joystickInputObject = nil
+        moveVector = Vector3.zero
+        TweenService:Create(joystickKnob, TweenInfo.new(0.1), {Position = UDim2.new(0.5, -25, 0.5, -25)}):Play()
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if joystickActive and input == joystickInputObject then
+        local baseCenter = joystickBase.AbsolutePosition + (joystickBase.AbsoluteSize / 2)
+        local mousePos = input.Position
+        local delta = Vector2.new(mousePos.X - baseCenter.X, mousePos.Y - baseCenter.Y)
+        local maxDist = 45
+        if delta.Magnitude > maxDist then
+            delta = delta.Unit * maxDist
+        end
+        joystickKnob.Position = UDim2.new(0.5, delta.X - 25, 0.5, delta.Y - 25)
+        local norm = delta / maxDist
+        moveVector = Vector3.new(norm.X, 0, norm.Y)
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if Settings.Enabled.CustomControls and player.Character and player.Character:FindFirstChild("Humanoid") then
+        local hum = player.Character.Humanoid
+        if moveVector.Magnitude > 0 then
+            local camCF = camera.CFrame
+            local camFlatVector = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z).Unit
+            local camRightVector = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
+            local worldMove = (camFlatVector * -moveVector.Z) + (camRightVector * moveVector.X)
+            hum:Move(worldMove, true)
+        end
+    end
+end)
+
+jumpButtonConnection = jumpBtn.MouseButton1Down:Connect(function()
+    if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+        player.Character.Humanoid.Jump = true
+    end
+end)
+
+attackButtonConnection = attackBtn.MouseButton1Down:Connect(function()
+    pcall(function()
+        local char = player.Character
+        if char then
+            local tool = char:FindFirstChildOfClass("Tool")
+            if tool then
+                tool:Activate()
+            else
+                VirtualUser:Button1Down(Vector2.new(0,0))
+                task.wait(0.05)
+                VirtualUser:Button1Up(Vector2.new(0,0))
+            end
+        end
+    end)
+end)
 
 local welcomeFrame = Instance.new("Frame", screenGui)
 welcomeFrame.Size = UDim2.new(0, 320, 0, 90)
@@ -227,7 +345,8 @@ local function updateBindList()
     local binds = {
         {Name = "SpeedHack", Active = Settings.SpeedHackActive},
         {Name = "VisibleCheck", Active = Settings.VisibleCheckActive},
-        {Name = "AutoJump", Active = Settings.AutoJumpActive}
+        {Name = "AutoJump", Active = Settings.AutoJumpActive},
+        {Name = "CustomControls", Active = Settings.CustomControlsActive}
     }
 
     for _, b in ipairs(binds) do
@@ -444,6 +563,10 @@ local function createCheckbox(name, parent, settingKey)
     box.MouseButton1Click:Connect(function()
         Settings.Enabled[settingKey] = not Settings.Enabled[settingKey]
         box.BackgroundColor3 = Settings.Enabled[settingKey] and UI_COLORS.CHECKBOX_ON or UI_COLORS.CHECKBOX_OFF
+        if settingKey == "CustomControls" then
+            Settings.CustomControlsActive = Settings.Enabled.CustomControls
+            customControlsGui.Enabled = Settings.CustomControlsActive
+        end
         updateBindList()
     end)
 end
@@ -595,6 +718,8 @@ createActionButton(miscContent, "Toggle Auto Jump", function()
     Settings.AutoJumpActive = not Settings.AutoJumpActive
     updateBindList()
 end)
+
+createCheckbox("CustomControls", miscContent, "CustomControls")
 
 createCheckbox("AntiKick", miscContent, "AntiKick")
 createCheckbox("Sky RGB", miscContent, "SkyRGB")
