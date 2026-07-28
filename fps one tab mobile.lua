@@ -4,9 +4,7 @@ local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
-local GuiService = game:GetService("GuiService")
 local VirtualUser = game:GetService("VirtualUser")
-local ContextActionService = game:GetService("ContextActionService")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -270,27 +268,27 @@ UserInputService.InputChanged:Connect(function(input)
         end
         joystickKnob.Position = UDim2.new(0.5, delta.X - 25, 0.5, delta.Y - 25)
         local norm = delta / maxDist
-        moveVector = Vector3.new(norm.X, 0, norm.Y)
+        -- Исправлено направление: инвертирована ось Y (в Roblox вперед — это отрицательный Z)
+        moveVector = Vector3.new(norm.X, 0, -norm.Y)
     end
 end)
 
--- Интеграция с официальным модулем управления Roblox для абсолютной плавности
-local function getControlsModule()
-    local success, res = pcall(function()
-        return require(player.PlayerScripts:WaitForChild("PlayerModule"):WaitForChild("ControlModule"))
-    end)
-    if success then return res end
-    return nil
-end
-
 RunService.RenderStepped:Connect(function()
     if Settings.Enabled.CustomControls and player.Character then
-        local controls = getControlsModule()
-        if controls and controls.MoveVector then
+        local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
             if moveVector.Magnitude > 0 then
-                controls.MoveVector = moveVector
+                local camCF = camera.CFrame
+                local camLook = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z).Unit
+                local camRight = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
+                local worldMove = (camRight * moveVector.X) + (camLook * moveVector.Z)
+                if worldMove.Magnitude > 0 then
+                    worldMove = worldMove.Unit
+                end
+                -- Прямое управление через Move устраняет скольжение (используется штатная физика ходьбы)
+                humanoid:Move(worldMove, true)
             else
-                controls.MoveVector = Vector3.zero
+                humanoid:Move(Vector3.zero, true)
             end
         end
     end
@@ -362,34 +360,36 @@ makeDraggable(joystickBase)
 makeDraggable(jumpBtn)
 makeDraggable(attackBtn)
 
-local function toggleDefaultControls(state)
-    pcall(function()
-        local controls = player.PlayerScripts:FindFirstChild("PlayerModule")
-        if controls then
-            local modules = require(controls)
-            local controlsModule = modules:GetControls()
-            if controlsModule then
-                if state then
-                    if controlsModule.Disable then controlsModule:Disable() end
-                else
-                    if controlsModule.Enable then controlsModule:Enable() end
-                end
-            end
-        end
-        
-        -- Глубокая очистка встроенного мобильного управления и кастомных элементов игры
-        for _, gui in ipairs(player.PlayerGui:GetChildren()) do
-            if gui:IsA("ScreenGui") then
-                local nameLower = string.lower(gui.Name)
-                if string.find(nameLower, "touch") or string.find(nameLower, "control") or string.find(nameLower, "mobile") or string.find(nameLower, "context") or string.find(nameLower, "combat") or string.find(nameLower, "hotbar") then
-                    if gui ~= customControlsGui and gui ~= screenGui then
-                        gui.Enabled = not state
+-- Функция постоянной очистки стандартных/встроенных элементов управления каждые 0.5 секунд
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if Settings.CustomControlsActive then
+            pcall(function()
+                local controls = player.PlayerScripts:FindFirstChild("PlayerModule")
+                if controls then
+                    local modules = require(controls)
+                    local controlsModule = modules:GetControls()
+                    if controlsModule and controlsModule.Disable then 
+                        controlsModule:Disable() 
                     end
                 end
-            end
+                
+                for _, gui in ipairs(player.PlayerGui:GetChildren()) do
+                    if gui:IsA("ScreenGui") then
+                        local nameLower = string.lower(gui.Name)
+                        if string.find(nameLower, "touch") or string.find(nameLower, "control") or string.find(nameLower, "mobile") or string.find(nameLower, "context") or string.find(nameLower, "combat") or string.find(nameLower, "hotbar") or string.find(nameLower, "joystick") then
+                            if gui ~= customControlsGui and gui ~= screenGui then
+                                gui.Enabled = false
+                                gui:Destroy()
+                            end
+                        end
+                    end
+                end
+            end)
         end
-    end)
-end
+    end
+end)
 
 local welcomeFrame = Instance.new("Frame", screenGui)
 welcomeFrame.Size = UDim2.new(0, 320, 0, 90)
@@ -652,7 +652,6 @@ local function createCheckbox(name, parent, settingKey)
         if settingKey == "CustomControls" then
             Settings.CustomControlsActive = Settings.Enabled.CustomControls
             customControlsGui.Enabled = Settings.CustomControlsActive
-            toggleDefaultControls(Settings.CustomControlsActive)
         elseif settingKey == "EditControls" then
             Settings.EditControlsActive = Settings.Enabled.EditControls
             if Settings.EditControlsActive then
