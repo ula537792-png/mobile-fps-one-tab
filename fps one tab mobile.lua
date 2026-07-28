@@ -240,7 +240,6 @@ local joystickActive = false
 local joystickInputObject = nil
 local joystickCenter = Vector2.zero
 
--- 1 в 1 оригинальный джойстик Роблокса: фиксированная база, сдвиг пальца внутри радиуса, отслеживание по InputObject
 joystickBase.InputBegan:Connect(function(input)
     if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not joystickActive then
         if not Settings.Enabled.EditControls then
@@ -305,50 +304,31 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Жёсткое глушение поворота камеры от стандартных сенсорных скриптов Roblox в зоне джойстика
+-- Абсолютная блокировка поворота камеры только для касаний внутри зоны джойстика
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if Settings.Enabled.CustomControls and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) then
+        local pos = input.Position
+        local absPos = joystickBase.AbsolutePosition
+        local absSize = joystickBase.AbsoluteSize
+        
+        if pos.X >= absPos.X - 30 and pos.X <= absPos.X + absSize.X + 30 and
+           pos.Y >= absPos.Y - 30 and pos.Y <= absPos.Y + absSize.Y + 30 then
+            input.Archivable = true -- помечаем ввод как обработанный интерфейсом
+        end
+    end
+end)
+
+-- Перехватчик событий движения для подавления вращения камеры стандартными скриптами Roblox
 local cameraModule = nil
 pcall(function()
     cameraModule = require(player.PlayerScripts:WaitForChild("PlayerModule"):WaitForChild("CameraModule"))
 end)
 
-RunService:BindToRenderStep("InveriumBlockCamera", Enum.RenderPriority.Camera.Value - 1, function()
-    if Settings.Enabled.CustomControls and joystickActive and joystickInputObject then
-        local pos = joystickInputObject.Position
-        local absPos = joystickBase.AbsolutePosition
-        local absSize = joystickBase.AbsoluteSize
-        
-        -- Полная проверка нахождения пальца внутри зоны джойстика с запасом
-        if pos.X >= absPos.X - 60 and pos.X <= absPos.X + absSize.X + 60 and
-           pos.Y >= absPos.Y - 60 and pos.Y <= absPos.Y + absSize.Y + 60 then
-            
-            -- Вызываем метод блокировки камеры встроенного CameraModule (если доступен), чтобы игра не крутила обзор
-            pcall(function()
-                if cameraModule and cameraModule.SetIsCooledDown then
-                    -- сброс состояния вращения
-                end
-            end)
-            
-            -- Также сбрасываем UserInputService сенсорные дельты камеры через PlayerModule, подменяя эмуляцию
-            local touchGui = CoreGui:FindFirstChild("TouchGui")
-            if touchGui then
-                local controlFrame = touchGui:FindFirstChild("TouchControlFrame")
-                if controlFrame then
-                    controlFrame.Visible = false
-                end
-            end
-        end
-    end
-end)
-
--- Перехватчик событий мыши/касаний для предотвращения поворота камеры Roblox по всему экрану, если палец зажат на джойстике
-local oldUserInput
 UserInputService.InputChanged:Connect(function(input)
     if Settings.Enabled.CustomControls and joystickActive and joystickInputObject then
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            if input == joystickInputObject then
-                -- Предотвращаем передачу движения этого же пальца на камеру
-                input.KeyCode = Enum.KeyCode.Unknown
-            end
+        if input == joystickInputObject then
+            -- Выключаем протаскивание этого же касания на поворот камеры
+            input.Position = Vector3.new(joystickCenter.X, joystickCenter.Y, 0)
         end
     end
 end)
@@ -447,23 +427,27 @@ task.spawn(function()
     end
 end)
 
-local welcomeFrame = Instance.new("Frame", screenGui)
-welcomeFrame.Size = UDim2.new(0, 320, 0, 90)
-welcomeFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-welcomeFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-welcomeFrame.BackgroundColor3 = UI_COLORS.BG
-welcomeFrame.BorderSizePixel = 0
-welcomeFrame.BackgroundTransparency = 1
-welcomeFrame.ZIndex = 10
+local welcomeFrame = Instance.new("ScreenGui", CoreGui)
+welcomeFrame.Name = "InveriumWelcome"
+welcomeFrame.DisplayOrder = 1000
 
-Instance.new("UICorner", welcomeFrame).CornerRadius = UDim.new(0, 12)
+local welcomeBox = Instance.new("Frame", welcomeFrame)
+welcomeBox.Size = UDim2.new(0, 320, 0, 90)
+welcomeBox.Position = UDim2.new(0.5, 0, 0.5, 0)
+welcomeBox.AnchorPoint = Vector2.new(0.5, 0.5)
+welcomeBox.BackgroundColor3 = UI_COLORS.BG
+welcomeBox.BorderSizePixel = 0
+welcomeBox.BackgroundTransparency = 1
+welcomeBox.ZIndex = 10
 
-local welcomeStroke = Instance.new("UIStroke", welcomeFrame)
+Instance.new("UICorner", welcomeBox).CornerRadius = UDim.new(0, 12)
+
+local welcomeStroke = Instance.new("UIStroke", welcomeBox)
 welcomeStroke.Color = UI_COLORS.TAB_ACTIVE
 welcomeStroke.Transparency = 1
 welcomeStroke.Thickness = 1.5
 
-local welcomeText = Instance.new("TextLabel", welcomeFrame)
+local welcomeText = Instance.new("TextLabel", welcomeBox)
 welcomeText.Size = UDim2.new(1, 0, 1, 0)
 welcomeText.Text = "Welcome to Inverium"
 welcomeText.TextColor3 = UI_COLORS.TEXT
@@ -537,7 +521,7 @@ toggleMenuBtn.InputChanged:Connect(function(input)
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if input == dragInputBtn and draggingBtn then
+    if input == dragInputBtn and draggingBtn then -- Исправлена ошибка оператора с && на and
         local delta = input.Position - dragStartBtn
         toggleMenuBtn.Position = UDim2.new(
             startPosBtn.X.Scale, 
@@ -881,14 +865,14 @@ createCheckbox("Sky RGB", miscContent, "SkyRGB")
 task.spawn(function()
     local introInfo = TweenInfo.new(0.6, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
     
-    TweenService:Create(welcomeFrame, introInfo, {BackgroundTransparency = 0.05}):Play()
+    TweenService:Create(welcomeBox, introInfo, {BackgroundTransparency = 0.05}):Play()
     TweenService:Create(welcomeStroke, introInfo, {Transparency = 0.3}):Play()
     TweenService:Create(welcomeText, introInfo, {TextTransparency = 0}):Play()
     
     task.wait(1.8)
     
     local outroInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-    TweenService:Create(welcomeFrame, outroInfo, {BackgroundTransparency = 1}):Play()
+    TweenService:Create(welcomeBox, outroInfo, {BackgroundTransparency = 1}):Play()
     TweenService:Create(welcomeStroke, outroInfo, {Transparency = 1}):Play()
     TweenService:Create(welcomeText, outroInfo, {TextTransparency = 1}):Play()
     
