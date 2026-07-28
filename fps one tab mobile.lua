@@ -279,7 +279,8 @@ UserInputService.InputChanged:Connect(function(input)
         else
             local filteredAlpha = (alpha - deadzone) / (1 - deadzone)
             local norm = delta.Unit * filteredAlpha
-            moveVector = Vector3.new(norm.X, 0, norm.Y)
+            -- Исправлена инверсия: ось Y инвертирована, чтобы вверх джойстика вел вперед по камере
+            moveVector = Vector3.new(norm.X, 0, -norm.Y)
         end
     end
 end)
@@ -304,30 +305,23 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Абсолютная блокировка поворота камеры только для касаний внутри зоны джойстика
+-- Глобальное перехватывание касаний внутри зоны джойстика для полного подавления вращения камеры движком Roblox
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if Settings.Enabled.CustomControls and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) then
         local pos = input.Position
         local absPos = joystickBase.AbsolutePosition
         local absSize = joystickBase.AbsoluteSize
         
-        if pos.X >= absPos.X - 30 and pos.X <= absPos.X + absSize.X + 30 and
-           pos.Y >= absPos.Y - 30 and pos.Y <= absPos.Y + absSize.Y + 30 then
-            input.Archivable = true -- помечаем ввод как обработанный интерфейсом
+        if pos.X >= absPos.X - 40 and pos.X <= absPos.X + absSize.X + 40 and
+           pos.Y >= absPos.Y - 40 and pos.Y <= absPos.Y + absSize.Y + 40 then
+            input.UserInputType = Enum.UserInputType.Focus -- сбиваем стандартный обработчик камеры роброкса
         end
     end
-end)
-
--- Перехватчик событий движения для подавления вращения камеры стандартными скриптами Roblox
-local cameraModule = nil
-pcall(function()
-    cameraModule = require(player.PlayerScripts:WaitForChild("PlayerModule"):WaitForChild("CameraModule"))
 end)
 
 UserInputService.InputChanged:Connect(function(input)
     if Settings.Enabled.CustomControls and joystickActive and joystickInputObject then
         if input == joystickInputObject then
-            -- Выключаем протаскивание этого же касания на поворот камеры
             input.Position = Vector3.new(joystickCenter.X, joystickCenter.Y, 0)
         end
     end
@@ -521,7 +515,7 @@ toggleMenuBtn.InputChanged:Connect(function(input)
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if input == dragInputBtn and draggingBtn then -- Исправлена ошибка оператора с && на and
+    if input == dragInputBtn and draggingBtn then
         local delta = input.Position - dragStartBtn
         toggleMenuBtn.Position = UDim2.new(
             startPosBtn.X.Scale, 
