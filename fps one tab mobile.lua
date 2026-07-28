@@ -5,6 +5,7 @@ local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local GuiService = game:GetService("GuiService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -145,7 +146,7 @@ local function getBestTarget()
     return bestTarget
 end
 
--- Авто-стрельба через прямой вызов тапа по мобильной кнопке
+-- Авто-стрельба через VirtualInputManager
 task.spawn(function()
     while true do
         task.wait(Settings.AutoShootDelay)
@@ -159,16 +160,19 @@ task.spawn(function()
                 
                 if canShoot then
                     pcall(function()
-                        local attackBtn = player.PlayerGui.MobileButtons.Buttons.Attack
+                        local attackBtn = player.PlayerGui:FindFirstChild("MobileButtons")
                         if attackBtn then
-                            local pos = attackBtn.AbsolutePosition + (attackBtn.AbsoluteSize / 2)
-                            if firetouchtap then
-                                firetouchtap(pos.X, pos.Y, 0)
-                            elseif pcall(function() return attackBtn.Activated end) then
-                                for _, connection in ipairs(getconnections(attackBtn.Activated)) do
-                                    connection:Fire()
-                                end
+                            attackBtn = attackBtn:FindFirstChild("Buttons")
+                            if attackBtn then
+                                attackBtn = attackBtn:FindFirstChild("Attack")
                             end
+                        end
+                        
+                        if attackBtn and attackBtn.AbsoluteSize.X > 0 then
+                            local pos = attackBtn.AbsolutePosition + (attackBtn.AbsoluteSize / 2)
+                            VirtualInputManager:SendTouchEvent(1, pos.X, pos.Y, game)
+                            task.wait(0.05)
+                            VirtualInputManager:SendTouchEvent(1, pos.X, pos.Y, game)
                         end
                     end)
                 end
