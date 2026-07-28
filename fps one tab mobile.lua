@@ -242,7 +242,7 @@ local joystickActive = false
 local joystickInputObject = nil
 
 joystickBase.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+    if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not joystickActive then
         if not Settings.Enabled.EditControls then
             joystickActive = true
             joystickInputObject = input
@@ -274,15 +274,24 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
+-- Интеграция с официальным модулем управления Roblox для абсолютной плавности
+local function getControlsModule()
+    local success, res = pcall(function()
+        return require(player.PlayerScripts:WaitForChild("PlayerModule"):WaitForChild("ControlModule"))
+    end)
+    if success then return res end
+    return nil
+end
+
 RunService.RenderStepped:Connect(function()
-    if Settings.Enabled.CustomControls and player.Character and player.Character:FindFirstChild("Humanoid") then
-        local hum = player.Character.Humanoid
-        if moveVector.Magnitude > 0 then
-            local camCF = camera.CFrame
-            local camFlatVector = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z).Unit
-            local camRightVector = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
-            local worldMove = (camFlatVector * -moveVector.Z) + (camRightVector * moveVector.X)
-            hum:Move(worldMove, true)
+    if Settings.Enabled.CustomControls and player.Character then
+        local controls = getControlsModule()
+        if controls and controls.MoveVector then
+            if moveVector.Magnitude > 0 then
+                controls.MoveVector = moveVector
+            else
+                controls.MoveVector = Vector3.zero
+            end
         end
     end
 end)
@@ -361,17 +370,18 @@ local function toggleDefaultControls(state)
             local controlsModule = modules:GetControls()
             if controlsModule then
                 if state then
-                    controlsModule:Disable()
+                    if controlsModule.Disable then controlsModule:Disable() end
                 else
-                    controlsModule:Enable()
+                    if controlsModule.Enable then controlsModule:Enable() end
                 end
             end
         end
         
+        -- Глубокая очистка встроенного мобильного управления и кастомных элементов игры
         for _, gui in ipairs(player.PlayerGui:GetChildren()) do
             if gui:IsA("ScreenGui") then
                 local nameLower = string.lower(gui.Name)
-                if string.find(nameLower, "touch") or string.find(nameLower, "control") or string.find(nameLower, "mobile") or string.find(nameLower, "context") then
+                if string.find(nameLower, "touch") or string.find(nameLower, "control") or string.find(nameLower, "mobile") or string.find(nameLower, "context") or string.find(nameLower, "combat") or string.find(nameLower, "hotbar") then
                     if gui ~= customControlsGui and gui ~= screenGui then
                         gui.Enabled = not state
                     end
