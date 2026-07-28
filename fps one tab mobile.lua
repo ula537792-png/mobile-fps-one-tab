@@ -114,7 +114,8 @@ end
 local function getBestTarget()
     local bestTarget = nil
     local shortestDistance = math.huge
-    local mousePos = UserInputService:GetMouseLocation()
+    -- Центр экрана вместо позиции мыши/пальца
+    local screenCenter = camera.ViewportSize / 2
 
     for _, v in ipairs(Players:GetPlayers()) do
         if v ~= player and v.Character and v.Character:FindFirstChild("Humanoid") and v.Character:FindFirstChild(Settings.AimPart) then
@@ -126,7 +127,7 @@ local function getBestTarget()
 
                     if onScreen then
                         local screenVector = Vector2.new(screenPos.X, screenPos.Y)
-                        local centerDistance = (screenVector - mousePos).Magnitude
+                        local centerDistance = (screenVector - screenCenter).Magnitude
                         local worldDistance = (aimPart.Position - camera.CFrame.Position).Magnitude
 
                         if centerDistance <= Settings.AimFOV then
@@ -283,11 +284,10 @@ mainFrame.BackgroundColor3 = UI_COLORS.BG
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
-mainFrame.Visible = false -- Скрыто до конца интро
+mainFrame.Visible = false
 mainFrame.BackgroundTransparency = 1
 mainFrame.ClipsDescendants = true
 
--- Защита от слишком больших или слишком маленьких экранов (мобилка/планшет/ПК)
 local sizeConstraint = Instance.new("UISizeConstraint", mainFrame)
 sizeConstraint.MaxSize = Vector2.new(650, 450)
 sizeConstraint.MinSize = Vector2.new(320, 240)
@@ -593,14 +593,12 @@ createCheckbox("Sky RGB", miscContent, "SkyRGB")
 task.spawn(function()
     local introInfo = TweenInfo.new(0.6, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
     
-    -- 1. Плавное появление надписи Welcome
     TweenService:Create(welcomeFrame, introInfo, {BackgroundTransparency = 0.05}):Play()
     TweenService:Create(welcomeStroke, introInfo, {Transparency = 0.3}):Play()
     TweenService:Create(welcomeText, introInfo, {TextTransparency = 0}):Play()
     
     task.wait(1.8)
     
-    -- 2. Плавное исчезновение приветствия
     local outroInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
     TweenService:Create(welcomeFrame, outroInfo, {BackgroundTransparency = 1}):Play()
     TweenService:Create(welcomeStroke, outroInfo, {Transparency = 1}):Play()
@@ -609,7 +607,6 @@ task.spawn(function()
     task.wait(0.5)
     welcomeFrame:Destroy()
     
-    -- 3. Появление главного меню и фоновых частиц
     mainFrame.Visible = true
     startParticles()
     
@@ -667,12 +664,14 @@ task.spawn(function()
 end)
 
 RunService:BindToRenderStep("InveriumRender", Enum.RenderPriority.Camera.Value + 1, function()
-    local mousePos = UserInputService:GetMouseLocation()
+    -- Центр экрана для фиксации фова по центру
+    local screenCenter = camera.ViewportSize / 2
     
     local tickVal = tick() * 2
     local rainbowColor = Color3.fromHSV(tickVal % 1, 1, 1)
 
-    fovCircle.Position = mousePos
+    -- Устанавливаем позицию круга строго по центру экрана
+    fovCircle.Position = screenCenter
     fovCircle.Radius = Settings.AimFOV
     fovCircle.Visible = Settings.Enabled.ShowFOV
     fovCircle.Color = Settings.Enabled.FOVRGB and rainbowColor or Settings.FOVColor
@@ -793,7 +792,6 @@ RunService:BindToRenderStep("InveriumRender", Enum.RenderPriority.Camera.Value +
                             end
                         end
                     else
-                        data.Box.Value = false
                         data.Box.Visible = false
                         data.HealthBarBg.Visible = false
                         data.HealthBar.Visible = false
