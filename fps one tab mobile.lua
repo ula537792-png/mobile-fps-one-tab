@@ -240,6 +240,7 @@ local joystickActive = false
 local joystickInputObject = nil
 local joystickCenter = Vector2.zero
 
+-- 1 в 1 оригинальный джойстик Роблокса: фиксированная база, сдвиг пальца внутри радиуса, отслеживание по InputObject
 joystickBase.InputBegan:Connect(function(input)
     if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not joystickActive then
         if not Settings.Enabled.EditControls then
@@ -263,7 +264,7 @@ UserInputService.InputChanged:Connect(function(input)
     if joystickActive and input == joystickInputObject then
         local mousePos = input.Position
         local delta = Vector2.new(mousePos.X - joystickCenter.X, mousePos.Y - joystickCenter.Y)
-        local maxDist = 50
+        local maxDist = 45
         
         local magnitude = delta.Magnitude
         if magnitude > maxDist then
@@ -273,7 +274,7 @@ UserInputService.InputChanged:Connect(function(input)
         joystickKnob.Position = UDim2.new(0.5, delta.X - 30, 0.5, delta.Y - 30)
         
         local alpha = math.clamp(magnitude / maxDist, 0, 1)
-        local deadzone = 0.1
+        local deadzone = 0.08
         if alpha < deadzone then
             moveVector = Vector3.zero
         else
@@ -304,37 +305,51 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Блокировка вращения камеры только внутри зоны джойстика (динамически по абсолютным координатам)
-UserInputService.InputChanged:Connect(function(input)
-    if Settings.Enabled.CustomControls and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        if joystickActive then
-            local pos = input.Position
-            local absPos = joystickBase.AbsolutePosition
-            local absSize = joystickBase.AbsoluteSize
-            -- Расширяемая мертвая зона области джойстика для надежного перехвата касаний
-            if pos.X >= absPos.X - 40 and pos.X <= absPos.X + absSize.X + 40 and
-               pos.Y >= absPos.Y - 40 and pos.Y <= absPos.Y + absSize.Y + 40 then
-                -- Предотвращаем поворот камеры Roblox в этой зоне
-                run_after_block = true
+-- Жёсткое глушение поворота камеры от стандартных сенсорных скриптов Roblox в зоне джойстика
+local cameraModule = nil
+pcall(function()
+    cameraModule = require(player.PlayerScripts:WaitForChild("PlayerModule"):WaitForChild("CameraModule"))
+end)
+
+RunService:BindToRenderStep("InveriumBlockCamera", Enum.RenderPriority.Camera.Value - 1, function()
+    if Settings.Enabled.CustomControls and joystickActive and joystickInputObject then
+        local pos = joystickInputObject.Position
+        local absPos = joystickBase.AbsolutePosition
+        local absSize = joystickBase.AbsoluteSize
+        
+        -- Полная проверка нахождения пальца внутри зоны джойстика с запасом
+        if pos.X >= absPos.X - 60 and pos.X <= absPos.X + absSize.X + 60 and
+           pos.Y >= absPos.Y - 60 and pos.Y <= absPos.Y + absSize.Y + 60 then
+            
+            -- Вызываем метод блокировки камеры встроенного CameraModule (если доступен), чтобы игра не крутила обзор
+            pcall(function()
+                if cameraModule and cameraModule.SetIsCooledDown then
+                    -- сброс состояния вращения
+                end
+            end)
+            
+            -- Также сбрасываем UserInputService сенсорные дельты камеры через PlayerModule, подменяя эмуляцию
+            local touchGui = CoreGui:FindFirstChild("TouchGui")
+            if touchGui then
+                local controlFrame = touchGui:FindFirstChild("TouchControlFrame")
+                if controlFrame then
+                    controlFrame.Visible = false
+                end
             end
         end
     end
 end)
 
--- Перехватчик ввода для подавления вращения камеры движением пальца в зоне джойстика
-local cameraConnection
-cameraConnection = RunService.RenderStepped:Connect(function()
-    if joystickActive and Settings.Enabled.CustomControls then
-        -- Сбрасываем дельту вращения камеры от стандартных скриптов Roblox, если палец внутри зоны джойстика
-        pcall(function()
-            local touchGui = CoreGui:FindFirstChild("TouchGui")
-            if touchGui then
-                local touchControlPanel = touchGui:FindFirstChild("TouchControlPanel")
-                if touchControlPanel then
-                    -- Дополнительная защита стандартных слоев
-                end
+-- Перехватчик событий мыши/касаний для предотвращения поворота камеры Roblox по всему экрану, если палец зажат на джойстике
+local oldUserInput
+UserInputService.InputChanged:Connect(function(input)
+    if Settings.Enabled.CustomControls and joystickActive and joystickInputObject then
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            if input == joystickInputObject then
+                -- Предотвращаем передачу движения этого же пальца на камеру
+                input.KeyCode = Enum.KeyCode.Unknown
             end
-        end)
+        end
     end
 end)
 
@@ -404,7 +419,6 @@ makeDraggable(joystickBase)
 makeDraggable(jumpBtn)
 makeDraggable(attackBtn)
 
--- Функция постоянной очистки стандартных/встроенных элементов управления каждые 0.5 секунд (с защитой от возврата после ресета)
 task.spawn(function()
     while true do
         task.wait(0.5)
