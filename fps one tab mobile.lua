@@ -4,6 +4,7 @@ local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
+local VirtualInputService = game:GetService("VirtualInputService")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -114,7 +115,6 @@ end
 local function getBestTarget()
     local bestTarget = nil
     local shortestDistance = math.huge
-    -- Центр экрана вместо позиции мыши/пальца
     local screenCenter = camera.ViewportSize / 2
 
     for _, v in ipairs(Players:GetPlayers()) do
@@ -145,6 +145,7 @@ local function getBestTarget()
     return bestTarget
 end
 
+-- Безопасная авто-стрельба без блокировки сенсора и интерфейса
 task.spawn(function()
     while true do
         task.wait(Settings.AutoShootDelay)
@@ -158,9 +159,17 @@ task.spawn(function()
                 
                 if canShoot then
                     task.spawn(function()
-                        mouse1press()
-                        task.wait(0.02)
-                        mouse1release()
+                        pcall(function()
+                            if VirtualInputService then
+                                VirtualInputService:SendMouseButtonEvent(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2, 0, true, game, 1)
+                                task.wait(0.02)
+                                VirtualInputService:SendMouseButtonEvent(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2, 0, false, game, 1)
+                            elseif mouse1press then
+                                mouse1press()
+                                task.wait(0.02)
+                                mouse1release()
+                            end
+                        end)
                     end)
                 end
             end
@@ -664,13 +673,11 @@ task.spawn(function()
 end)
 
 RunService:BindToRenderStep("InveriumRender", Enum.RenderPriority.Camera.Value + 1, function()
-    -- Центр экрана для фиксации фова по центру
     local screenCenter = camera.ViewportSize / 2
     
     local tickVal = tick() * 2
     local rainbowColor = Color3.fromHSV(tickVal % 1, 1, 1)
 
-    -- Устанавливаем позицию круга строго по центру экрана
     fovCircle.Position = screenCenter
     fovCircle.Radius = Settings.AimFOV
     fovCircle.Visible = Settings.Enabled.ShowFOV
