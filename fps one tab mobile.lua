@@ -6,6 +6,7 @@ local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local GuiService = game:GetService("GuiService")
 local VirtualUser = game:GetService("VirtualUser")
+local ContextActionService = game:GetService("ContextActionService")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -29,11 +30,13 @@ local Settings = {
         SkyRGB = false,
         SpeedHack = false,
         AutoJump = false,
-        CustomControls = false
+        CustomControls = false,
+        EditControls = false
     },
     SpeedHackActive = false,
     AutoJumpActive = false,
     CustomControlsActive = false,
+    EditControlsActive = false,
     VisibleCheckActive = true,
     AntiKickActive = false,
     SpeedMultiplier = 1,
@@ -148,7 +151,6 @@ local function getBestTarget()
     return bestTarget
 end
 
--- Авто-стрельба как на ПК (эмуляция клика мыши по инструменту)
 task.spawn(function()
     while true do
         task.wait(Settings.AutoShootDelay)
@@ -187,7 +189,6 @@ screenGui.IgnoreGuiInset = true
 screenGui.ResetOnSpawn = false
 screenGui.Parent = CoreGui
 
--- Кастомное управление (джойстик, прыжок, атака)
 local customControlsGui = Instance.new("ScreenGui")
 customControlsGui.Name = "InveriumCustomControls"
 customControlsGui.DisplayOrder = 998
@@ -242,8 +243,10 @@ local joystickInputObject = nil
 
 joystickBase.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        joystickActive = true
-        joystickInputObject = input
+        if not Settings.Enabled.EditControls then
+            joystickActive = true
+            joystickInputObject = input
+        end
     end
 end)
 
@@ -284,27 +287,84 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-jumpButtonConnection = jumpBtn.MouseButton1Down:Connect(function()
-    if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
-        player.Character.Humanoid.Jump = true
+jumpBtn.MouseButton1Down:Connect(function()
+    if not Settings.Enabled.EditControls then
+        if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+            player.Character.Humanoid.Jump = true
+        end
     end
 end)
 
-attackButtonConnection = attackBtn.MouseButton1Down:Connect(function()
-    pcall(function()
-        local char = player.Character
-        if char then
-            local tool = char:FindFirstChildOfClass("Tool")
-            if tool then
-                tool:Activate()
-            else
-                VirtualUser:Button1Down(Vector2.new(0,0))
-                task.wait(0.05)
-                VirtualUser:Button1Up(Vector2.new(0,0))
+attackBtn.MouseButton1Down:Connect(function()
+    if not Settings.Enabled.EditControls then
+        pcall(function()
+            local char = player.Character
+            if char then
+                local tool = char:FindFirstChildOfClass("Tool")
+                if tool then
+                    tool:Activate()
+                else
+                    VirtualUser:Button1Down(Vector2.new(0,0))
+                    task.wait(0.05)
+                    VirtualUser:Button1Up(Vector2.new(0,0))
+                end
             end
+        end)
+    end
+end)
+
+local function makeDraggable(element)
+    local dragging = false
+    local dragInput, dragStart, startPos
+
+    element.InputBegan:Connect(function(input)
+        if Settings.Enabled.EditControls and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+            dragging = true
+            dragStart = input.Position
+            startPos = element.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
         end
     end)
-end)
+
+    element.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging and Settings.Enabled.EditControls then
+            local delta = input.Position - dragStart
+            element.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
+makeDraggable(joystickBase)
+makeDraggable(jumpBtn)
+makeDraggable(attackBtn)
+
+local function toggleDefaultControls(state)
+    pcall(function()
+        local touchGui = player.PlayerGui:FindFirstChild("TouchGui")
+        if touchGui then
+            touchGui.Enabled = not state
+        end
+        local mobileButtons = player.PlayerGui:FindFirstChild("MobileButtons")
+        if mobileButtons then
+            mobileButtons.Enabled = not state
+        end
+    end)
+end
 
 local welcomeFrame = Instance.new("Frame", screenGui)
 welcomeFrame.Size = UDim2.new(0, 320, 0, 90)
@@ -346,7 +406,8 @@ local function updateBindList()
         {Name = "SpeedHack", Active = Settings.SpeedHackActive},
         {Name = "VisibleCheck", Active = Settings.VisibleCheckActive},
         {Name = "AutoJump", Active = Settings.AutoJumpActive},
-        {Name = "CustomControls", Active = Settings.CustomControlsActive}
+        {Name = "CustomControls", Active = Settings.CustomControlsActive},
+        {Name = "EditControls", Active = Settings.EditControlsActive}
     }
 
     for _, b in ipairs(binds) do
@@ -566,6 +627,18 @@ local function createCheckbox(name, parent, settingKey)
         if settingKey == "CustomControls" then
             Settings.CustomControlsActive = Settings.Enabled.CustomControls
             customControlsGui.Enabled = Settings.CustomControlsActive
+            toggleDefaultControls(Settings.CustomControlsActive)
+        elseif settingKey == "EditControls" then
+            Settings.EditControlsActive = Settings.Enabled.EditControls
+            if Settings.EditControlsActive then
+                joystickBase.BackgroundTransparency = 0.2
+                jumpBtn.BackgroundTransparency = 0.2
+                attackBtn.BackgroundTransparency = 0.1
+            else
+                joystickBase.BackgroundTransparency = 0.5
+                jumpBtn.BackgroundTransparency = 0.5
+                attackBtn.BackgroundTransparency = 0.3
+            end
         end
         updateBindList()
     end)
@@ -720,6 +793,7 @@ createActionButton(miscContent, "Toggle Auto Jump", function()
 end)
 
 createCheckbox("CustomControls", miscContent, "CustomControls")
+createCheckbox("EditControls", miscContent, "EditControls")
 
 createCheckbox("AntiKick", miscContent, "AntiKick")
 createCheckbox("Sky RGB", miscContent, "SkyRGB")
