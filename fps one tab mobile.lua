@@ -537,7 +537,7 @@ toggleMenuBtn.InputChanged:Connect(function(input)
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if input == dragInputBtn && draggingBtn then
+    if input == dragInputBtn and draggingBtn then
         local delta = input.Position - dragStartBtn
         toggleMenuBtn.Position = UDim2.new(
             startPosBtn.X.Scale, 
