@@ -4,7 +4,6 @@ local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
-local VirtualInputService = game:GetService("VirtualInputService")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -145,7 +144,7 @@ local function getBestTarget()
     return bestTarget
 end
 
--- Безопасная авто-стрельба без блокировки сенсора и интерфейса
+-- Безопасная авто-стрельба для мобильных устройств
 task.spawn(function()
     while true do
         task.wait(Settings.AutoShootDelay)
@@ -158,18 +157,12 @@ task.spawn(function()
                 end
                 
                 if canShoot then
-                    task.spawn(function()
-                        pcall(function()
-                            if VirtualInputService then
-                                VirtualInputService:SendMouseButtonEvent(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2, 0, true, game, 1)
-                                task.wait(0.02)
-                                VirtualInputService:SendMouseButtonEvent(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2, 0, false, game, 1)
-                            elseif mouse1press then
-                                mouse1press()
-                                task.wait(0.02)
-                                mouse1release()
-                            end
-                        end)
+                    pcall(function()
+                        if mouse1press then
+                            mouse1press()
+                            task.wait(0.02)
+                            mouse1release()
+                        end
                     end)
                 end
             end
@@ -184,7 +177,6 @@ screenGui.IgnoreGuiInset = true
 screenGui.ResetOnSpawn = false
 screenGui.Parent = CoreGui
 
--- === ВСТУПИТЕЛЬНАЯ ЗАСТАВКА (WELCOME TO INVERIUM) ===
 local welcomeFrame = Instance.new("Frame", screenGui)
 welcomeFrame.Size = UDim2.new(0, 320, 0, 90)
 welcomeFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -284,7 +276,6 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- === ГЛАВНОЕ МЕНЮ С АДАПТИВНЫМИ ОГРАНИЧЕНИЯМИ ===
 local mainFrame = Instance.new("Frame", screenGui)
 mainFrame.Size = UDim2.new(0.65, 0, 0.55, 0)
 mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -306,7 +297,6 @@ mainStroke.Color = UI_COLORS.TAB_ACTIVE
 mainStroke.Transparency = 1
 mainStroke.Thickness = 1.5
 
--- === ФОНОВЫЕ АНИМИРОВАННЫЕ ЧАСТИЦЫ ===
 local bgContainer = Instance.new("Frame", mainFrame)
 bgContainer.Size = UDim2.new(1, 0, 1, 0)
 bgContainer.BackgroundTransparency = 1
@@ -598,7 +588,6 @@ end)
 createCheckbox("AntiKick", miscContent, "AntiKick")
 createCheckbox("Sky RGB", miscContent, "SkyRGB")
 
--- === ПОСЛЕДОВАТЕЛЬНОСТЬ АНИМАЦИИ ЗАПУСКА ===
 task.spawn(function()
     local introInfo = TweenInfo.new(0.6, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
     
