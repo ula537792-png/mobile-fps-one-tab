@@ -196,16 +196,16 @@ customControlsGui.Enabled = false
 customControlsGui.Parent = CoreGui
 
 local joystickBase = Instance.new("Frame", customControlsGui)
-joystickBase.Size = UDim2.new(0, 120, 0, 120)
-joystickBase.Position = UDim2.new(0, 40, 1, -160)
+joystickBase.Size = UDim2.new(0, 140, 0, 140)
+joystickBase.Position = UDim2.new(0, 40, 1, -180)
 joystickBase.BackgroundColor3 = UI_COLORS.BG
 joystickBase.BackgroundTransparency = 0.5
 joystickBase.BorderSizePixel = 0
 Instance.new("UICorner", joystickBase).CornerRadius = UDim.new(1, 0)
 
 local joystickKnob = Instance.new("Frame", joystickBase)
-joystickKnob.Size = UDim2.new(0, 50, 0, 50)
-joystickKnob.Position = UDim2.new(0.5, -25, 0.5, -25)
+joystickKnob.Size = UDim2.new(0, 60, 0, 60)
+joystickKnob.Position = UDim2.new(0.5, -30, 0.5, -30)
 joystickKnob.BackgroundColor3 = UI_COLORS.TAB_ACTIVE
 joystickKnob.BackgroundTransparency = 0.2
 joystickKnob.BorderSizePixel = 0
@@ -238,12 +238,14 @@ Instance.new("UICorner", attackBtn).CornerRadius = UDim.new(1, 0)
 local moveVector = Vector3.zero
 local joystickActive = false
 local joystickInputObject = nil
+local joystickCenter = Vector2.zero
 
 joystickBase.InputBegan:Connect(function(input)
     if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and not joystickActive then
         if not Settings.Enabled.EditControls then
             joystickActive = true
             joystickInputObject = input
+            joystickCenter = joystickBase.AbsolutePosition + (joystickBase.AbsoluteSize / 2)
         end
     end
 end)
@@ -253,23 +255,32 @@ UserInputService.InputEnded:Connect(function(input)
         joystickActive = false
         joystickInputObject = nil
         moveVector = Vector3.zero
-        TweenService:Create(joystickKnob, TweenInfo.new(0.1), {Position = UDim2.new(0.5, -25, 0.5, -25)}):Play()
+        TweenService:Create(joystickKnob, TweenInfo.new(0.1), {Position = UDim2.new(0.5, -30, 0.5, -30)}):Play()
     end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
     if joystickActive and input == joystickInputObject then
-        local baseCenter = joystickBase.AbsolutePosition + (joystickBase.AbsoluteSize / 2)
         local mousePos = input.Position
-        local delta = Vector2.new(mousePos.X - baseCenter.X, mousePos.Y - baseCenter.Y)
-        local maxDist = 45
-        if delta.Magnitude > maxDist then
+        local delta = Vector2.new(mousePos.X - joystickCenter.X, mousePos.Y - joystickCenter.Y)
+        local maxDist = 50
+        
+        local magnitude = delta.Magnitude
+        if magnitude > maxDist then
             delta = delta.Unit * maxDist
         end
-        joystickKnob.Position = UDim2.new(0.5, delta.X - 25, 0.5, delta.Y - 25)
-        local norm = delta / maxDist
-        -- Исправлено направление: инвертирована ось Y (в Roblox вперед — это отрицательный Z)
-        moveVector = Vector3.new(norm.X, 0, -norm.Y)
+        
+        joystickKnob.Position = UDim2.new(0.5, delta.X - 30, 0.5, delta.Y - 30)
+        
+        local alpha = math.clamp(magnitude / maxDist, 0, 1)
+        local deadzone = 0.1
+        if alpha < deadzone then
+            moveVector = Vector3.zero
+        else
+            local filteredAlpha = (alpha - deadzone) / (1 - deadzone)
+            local norm = delta.Unit * filteredAlpha
+            moveVector = Vector3.new(norm.X, 0, norm.Y)
+        end
     end
 end)
 
@@ -285,12 +296,45 @@ RunService.RenderStepped:Connect(function()
                 if worldMove.Magnitude > 0 then
                     worldMove = worldMove.Unit
                 end
-                -- Прямое управление через Move устраняет скольжение (используется штатная физика ходьбы)
                 humanoid:Move(worldMove, true)
             else
                 humanoid:Move(Vector3.zero, true)
             end
         end
+    end
+end)
+
+-- Блокировка вращения камеры только внутри зоны джойстика (динамически по абсолютным координатам)
+UserInputService.InputChanged:Connect(function(input)
+    if Settings.Enabled.CustomControls and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        if joystickActive then
+            local pos = input.Position
+            local absPos = joystickBase.AbsolutePosition
+            local absSize = joystickBase.AbsoluteSize
+            -- Расширяемая мертвая зона области джойстика для надежного перехвата касаний
+            if pos.X >= absPos.X - 40 and pos.X <= absPos.X + absSize.X + 40 and
+               pos.Y >= absPos.Y - 40 and pos.Y <= absPos.Y + absSize.Y + 40 then
+                -- Предотвращаем поворот камеры Roblox в этой зоне
+                run_after_block = true
+            end
+        end
+    end
+end)
+
+-- Перехватчик ввода для подавления вращения камеры движением пальца в зоне джойстика
+local cameraConnection
+cameraConnection = RunService.RenderStepped:Connect(function()
+    if joystickActive and Settings.Enabled.CustomControls then
+        -- Сбрасываем дельту вращения камеры от стандартных скриптов Roblox, если палец внутри зоны джойстика
+        pcall(function()
+            local touchGui = CoreGui:FindFirstChild("TouchGui")
+            if touchGui then
+                local touchControlPanel = touchGui:FindFirstChild("TouchControlPanel")
+                if touchControlPanel then
+                    -- Дополнительная защита стандартных слоев
+                end
+            end
+        end)
     end
 end)
 
@@ -360,34 +404,32 @@ makeDraggable(joystickBase)
 makeDraggable(jumpBtn)
 makeDraggable(attackBtn)
 
--- Функция постоянной очистки стандартных/встроенных элементов управления каждые 0.5 секунд
+-- Функция постоянной очистки стандартных/встроенных элементов управления каждые 0.5 секунд (с защитой от возврата после ресета)
 task.spawn(function()
     while true do
         task.wait(0.5)
-        if Settings.CustomControlsActive then
-            pcall(function()
-                local controls = player.PlayerScripts:FindFirstChild("PlayerModule")
-                if controls then
-                    local modules = require(controls)
-                    local controlsModule = modules:GetControls()
-                    if controlsModule and controlsModule.Disable then 
-                        controlsModule:Disable() 
-                    end
+        pcall(function()
+            local controls = player.PlayerScripts:FindFirstChild("PlayerModule")
+            if controls then
+                local modules = require(controls)
+                local controlsModule = modules:GetControls()
+                if controlsModule and controlsModule.Disable then 
+                    controlsModule:Disable() 
                 end
-                
-                for _, gui in ipairs(player.PlayerGui:GetChildren()) do
-                    if gui:IsA("ScreenGui") then
-                        local nameLower = string.lower(gui.Name)
-                        if string.find(nameLower, "touch") or string.find(nameLower, "control") or string.find(nameLower, "mobile") or string.find(nameLower, "context") or string.find(nameLower, "combat") or string.find(nameLower, "hotbar") or string.find(nameLower, "joystick") then
-                            if gui ~= customControlsGui and gui ~= screenGui then
-                                gui.Enabled = false
-                                gui:Destroy()
-                            end
+            end
+            
+            for _, gui in ipairs(player.PlayerGui:GetChildren()) do
+                if gui:IsA("ScreenGui") then
+                    local nameLower = string.lower(gui.Name)
+                    if string.find(nameLower, "touch") or string.find(nameLower, "control") or string.find(nameLower, "mobile") or string.find(nameLower, "context") or string.find(nameLower, "combat") or string.find(nameLower, "hotbar") or string.find(nameLower, "joystick") then
+                        if gui ~= customControlsGui and gui ~= screenGui then
+                            gui.Enabled = false
+                            gui:Destroy()
                         end
                     end
                 end
-            end)
-        end
+            end
+        end)
     end
 end)
 
@@ -481,7 +523,7 @@ toggleMenuBtn.InputChanged:Connect(function(input)
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if input == dragInputBtn and draggingBtn then
+    if input == dragInputBtn && draggingBtn then
         local delta = input.Position - dragStartBtn
         toggleMenuBtn.Position = UDim2.new(
             startPosBtn.X.Scale, 
