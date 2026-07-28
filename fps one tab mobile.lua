@@ -3,19 +3,20 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
 local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 local UI_COLORS = {
-    BG = Color3.fromRGB(20, 20, 20),
-    TAB_INACTIVE = Color3.fromRGB(30, 30, 30),
-    TAB_ACTIVE = Color3.fromRGB(255, 100, 150),
-    CHECKBOX_OFF = Color3.fromRGB(40, 40, 40),
-    CHECKBOX_ON = Color3.fromRGB(255, 100, 150),
-    TEXT = Color3.new(1, 1, 1),
-    BIND_ON = Color3.fromRGB(0, 255, 0),
-    BIND_OFF = Color3.fromRGB(255, 255, 255)
+    BG = Color3.fromRGB(12, 10, 18),
+    TAB_INACTIVE = Color3.fromRGB(22, 18, 32),
+    TAB_ACTIVE = Color3.fromRGB(180, 50, 255),
+    CHECKBOX_OFF = Color3.fromRGB(30, 24, 45),
+    CHECKBOX_ON = Color3.fromRGB(180, 50, 255),
+    TEXT = Color3.fromRGB(240, 235, 255),
+    BIND_ON = Color3.fromRGB(100, 255, 150),
+    BIND_OFF = Color3.fromRGB(200, 190, 220)
 }
 
 local Settings = {
@@ -37,9 +38,9 @@ local Settings = {
     AimSmooth = 0.2,
     AutoShootDelay = 0.1,
     AimPart = "Head",
-    FOVColor = Color3.fromRGB(255, 100, 150),
-    ESPColor = Color3.fromRGB(255, 100, 150),
-    SkyColor = Color3.fromRGB(100, 150, 255)
+    FOVColor = Color3.fromRGB(180, 50, 255),
+    ESPColor = Color3.fromRGB(180, 50, 255),
+    SkyColor = Color3.fromRGB(30, 20, 50)
 }
 
 pcall(function()
@@ -173,6 +174,33 @@ screenGui.IgnoreGuiInset = true
 screenGui.ResetOnSpawn = false
 screenGui.Parent = CoreGui
 
+-- === ВСТУПИТЕЛЬНАЯ ЗАСТАВКА (WELCOME TO INVERIUM) ===
+local welcomeFrame = Instance.new("Frame", screenGui)
+welcomeFrame.Size = UDim2.new(0, 320, 0, 90)
+welcomeFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+welcomeFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+welcomeFrame.BackgroundColor3 = UI_COLORS.BG
+welcomeFrame.BorderSizePixel = 0
+welcomeFrame.BackgroundTransparency = 1
+welcomeFrame.ZIndex = 10
+
+Instance.new("UICorner", welcomeFrame).CornerRadius = UDim.new(0, 12)
+
+local welcomeStroke = Instance.new("UIStroke", welcomeFrame)
+welcomeStroke.Color = UI_COLORS.TAB_ACTIVE
+welcomeStroke.Transparency = 1
+welcomeStroke.Thickness = 1.5
+
+local welcomeText = Instance.new("TextLabel", welcomeFrame)
+welcomeText.Size = UDim2.new(1, 0, 1, 0)
+welcomeText.Text = "Welcome to Inverium"
+welcomeText.TextColor3 = UI_COLORS.TEXT
+welcomeText.Font = Enum.Font.GothamBold
+welcomeText.TextSize = 18
+welcomeText.BackgroundTransparency = 1
+welcomeText.TextTransparency = 1
+welcomeText.ZIndex = 11
+
 local bindListContainer = Instance.new("Frame", screenGui)
 bindListContainer.Size = UDim2.new(0, 180, 0, 150)
 bindListContainer.Position = UDim2.new(0, 10, 0, 60)
@@ -246,21 +274,75 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
+-- === ГЛАВНОЕ МЕНЮ С АДАПТИВНЫМИ ОГРАНИЧЕНИЯМИ ===
 local mainFrame = Instance.new("Frame", screenGui)
 mainFrame.Size = UDim2.new(0.65, 0, 0.55, 0)
-mainFrame.Position = UDim2.new(0.175, 0, 0.225, 0)
+mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 mainFrame.BackgroundColor3 = UI_COLORS.BG
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
-mainFrame.Visible = true
+mainFrame.Visible = false -- Скрыто до конца интро
+mainFrame.BackgroundTransparency = 1
+mainFrame.ClipsDescendants = true
+
+-- Защита от слишком больших или слишком маленьких экранов (мобилка/планшет/ПК)
+local sizeConstraint = Instance.new("UISizeConstraint", mainFrame)
+sizeConstraint.MaxSize = Vector2.new(650, 450)
+sizeConstraint.MinSize = Vector2.new(320, 240)
+
+local mainStroke = Instance.new("UIStroke", mainFrame)
+mainStroke.Color = UI_COLORS.TAB_ACTIVE
+mainStroke.Transparency = 1
+mainStroke.Thickness = 1.5
+
+-- === ФОНОВЫЕ АНИМИРОВАННЫЕ ЧАСТИЦЫ ===
+local bgContainer = Instance.new("Frame", mainFrame)
+bgContainer.Size = UDim2.new(1, 0, 1, 0)
+bgContainer.BackgroundTransparency = 1
+bgContainer.ZIndex = 0
+
+local function spawnParticle()
+    if not mainFrame.Parent then return end
+    local p = Instance.new("Frame", bgContainer)
+    local size = math.random(4, 7)
+    p.Size = UDim2.new(0, size, 0, size)
+    local startX = math.random()
+    p.Position = UDim2.new(startX, 0, 1.1, 0)
+    p.BackgroundColor3 = UI_COLORS.TAB_ACTIVE
+    p.BackgroundTransparency = math.random(2, 6) / 10
+    p.BorderSizePixel = 0
+    p.ZIndex = 1
+    Instance.new("UICorner", p).CornerRadius = UDim.new(1, 0)
+    
+    local duration = math.random(3, 5)
+    local endX = startX + (math.random() - 0.5) * 0.2
+    
+    local tween = TweenService:Create(p, TweenInfo.new(duration, Enum.EasingStyle.Linear), {
+        Position = UDim2.new(endX, 0, -0.1, 0),
+        BackgroundTransparency = 1
+    })
+    
+    tween:Play()
+    tween.Completed:Connect(function()
+        p:Destroy()
+        spawnParticle()
+    end)
+end
+
+local function startParticles()
+    for i = 1, 12 do
+        task.delay(math.random() * 2, spawnParticle)
+    end
+end
 
 toggleMenuBtn.MouseButton1Click:Connect(function()
     mainFrame.Visible = not mainFrame.Visible
 end)
 
 local uiCorner = Instance.new("UICorner", mainFrame)
-uiCorner.CornerRadius = UDim.new(0, 8)
+uiCorner.CornerRadius = UDim.new(0, 10)
 
 local header = Instance.new("TextLabel", mainFrame)
 header.Text = "inverium"
@@ -269,6 +351,7 @@ header.Font = Enum.Font.GothamBold
 header.TextSize = 16
 header.TextColor3 = UI_COLORS.TAB_ACTIVE
 header.BackgroundTransparency = 1
+header.ZIndex = 2
 
 local tabs = {"Combat", "Player Visuals", "Misc"}
 local tabContents = {}
@@ -294,6 +377,7 @@ tabContainer.Name = "TabContainer"
 tabContainer.Size = UDim2.new(0.7, -10, 0, 30)
 tabContainer.Position = UDim2.new(0.3, 0, 0, 4)
 tabContainer.BackgroundTransparency = 1
+tabContainer.ZIndex = 2
 
 local totalTabs = #tabs
 for i, name in ipairs(tabs) do
@@ -306,6 +390,7 @@ for i, name in ipairs(tabs) do
     btn.TextColor3 = UI_COLORS.TEXT
     btn.BackgroundColor3 = (name == currentTab) and UI_COLORS.TAB_ACTIVE or UI_COLORS.TAB_INACTIVE
     btn.BorderSizePixel = 0
+    btn.ZIndex = 2
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
     btn.MouseButton1Click:Connect(function() switchTab(name) end)
 
@@ -315,6 +400,7 @@ for i, name in ipairs(tabs) do
     scroll.BackgroundTransparency = 1
     scroll.Visible = (name == currentTab)
     scroll.ScrollBarThickness = 4
+    scroll.ZIndex = 2
     Instance.new("UIListLayout", scroll).Padding = UDim.new(0, 4)
     Instance.new("UIPadding", scroll).PaddingLeft = UDim.new(0, 6)
     tabContents[name] = scroll
@@ -324,12 +410,14 @@ local function createCheckbox(name, parent, settingKey)
     local container = Instance.new("Frame", parent)
     container.Size = UDim2.new(1, -12, 0, 28)
     container.BackgroundTransparency = 1
+    container.ZIndex = 2
 
     local box = Instance.new("TextButton", container)
     box.Size = UDim2.new(0, 18, 0, 18)
     box.Position = UDim2.new(0, 0, 0, 5)
     box.BackgroundColor3 = Settings.Enabled[settingKey] and UI_COLORS.CHECKBOX_ON or UI_COLORS.CHECKBOX_OFF
     box.Text = ""
+    box.ZIndex = 2
     Instance.new("UICorner", box).CornerRadius = UDim.new(0, 4)
 
     local label = Instance.new("TextLabel", container)
@@ -341,6 +429,7 @@ local function createCheckbox(name, parent, settingKey)
     label.TextSize = 12
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.BackgroundTransparency = 1
+    label.ZIndex = 2
 
     box.MouseButton1Click:Connect(function()
         Settings.Enabled[settingKey] = not Settings.Enabled[settingKey]
@@ -353,6 +442,7 @@ local function createDropdown(name, parent, options, callback)
     local container = Instance.new("Frame", parent)
     container.Size = UDim2.new(1, -12, 0, 30)
     container.BackgroundTransparency = 1
+    container.ZIndex = 2
 
     local label = Instance.new("TextLabel", container)
     label.Size = UDim2.new(0.5, 0, 1, 0)
@@ -362,6 +452,7 @@ local function createDropdown(name, parent, options, callback)
     label.TextSize = 12
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.BackgroundTransparency = 1
+    label.ZIndex = 2
 
     local btn = Instance.new("TextButton", container)
     btn.Size = UDim2.new(0.5, 0, 1, -4)
@@ -371,6 +462,7 @@ local function createDropdown(name, parent, options, callback)
     btn.TextColor3 = UI_COLORS.TAB_ACTIVE
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 12
+    btn.ZIndex = 2
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
 
     local currentIndex = 1
@@ -391,6 +483,7 @@ local function createSlider(name, parent, min, max, settingKey)
     local container = Instance.new("Frame", parent)
     container.Size = UDim2.new(1, -12, 0, 42)
     container.BackgroundTransparency = 1
+    container.ZIndex = 2
 
     local label = Instance.new("TextLabel", container)
     label.Text = name .. ": " .. string.format("%.2f", Settings[settingKey])
@@ -399,16 +492,19 @@ local function createSlider(name, parent, min, max, settingKey)
     label.Font = Enum.Font.Gotham
     label.TextSize = 12
     label.BackgroundTransparency = 1
+    label.ZIndex = 2
 
     local bg = Instance.new("Frame", container)
     bg.Size = UDim2.new(1, 0, 0, 10)
     bg.Position = UDim2.new(0, 0, 0, 22)
     bg.BackgroundColor3 = UI_COLORS.CHECKBOX_OFF
+    bg.ZIndex = 2
     Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 5)
 
     local bar = Instance.new("Frame", bg)
     bar.Size = UDim2.new(math.clamp((Settings[settingKey]-min)/(max-min), 0, 1), 0, 1, 0)
     bar.BackgroundColor3 = UI_COLORS.TAB_ACTIVE
+    bar.ZIndex = 2
     Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 5)
 
     local dragging = false
@@ -445,6 +541,7 @@ local function createActionButton(parent, labelText, onClick)
     btn.TextColor3 = UI_COLORS.TEXT
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 12
+    btn.ZIndex = 2
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
     btn.MouseButton1Click:Connect(onClick)
 end
@@ -491,6 +588,35 @@ end)
 
 createCheckbox("AntiKick", miscContent, "AntiKick")
 createCheckbox("Sky RGB", miscContent, "SkyRGB")
+
+-- === ПОСЛЕДОВАТЕЛЬНОСТЬ АНИМАЦИИ ЗАПУСКА ===
+task.spawn(function()
+    local introInfo = TweenInfo.new(0.6, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    
+    -- 1. Плавное появление надписи Welcome
+    TweenService:Create(welcomeFrame, introInfo, {BackgroundTransparency = 0.05}):Play()
+    TweenService:Create(welcomeStroke, introInfo, {Transparency = 0.3}):Play()
+    TweenService:Create(welcomeText, introInfo, {TextTransparency = 0}):Play()
+    
+    task.wait(1.8)
+    
+    -- 2. Плавное исчезновение приветствия
+    local outroInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    TweenService:Create(welcomeFrame, outroInfo, {BackgroundTransparency = 1}):Play()
+    TweenService:Create(welcomeStroke, outroInfo, {Transparency = 1}):Play()
+    TweenService:Create(welcomeText, outroInfo, {TextTransparency = 1}):Play()
+    
+    task.wait(0.5)
+    welcomeFrame:Destroy()
+    
+    -- 3. Появление главного меню и фоновых частиц
+    mainFrame.Visible = true
+    startParticles()
+    
+    local mainTweenInfo = TweenInfo.new(0.6, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    TweenService:Create(mainFrame, mainTweenInfo, {BackgroundTransparency = 0.05}):Play()
+    TweenService:Create(mainStroke, mainTweenInfo, {Transparency = 0.3}):Play()
+end)
 
 task.spawn(function()
     while true do
