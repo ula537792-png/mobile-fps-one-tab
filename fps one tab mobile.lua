@@ -276,7 +276,7 @@ toggleMenuBtn.InputChanged:Connect(function(input)
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    -- Исправлено с && на and
+  
     if input == dragInputBtn and draggingBtn then
         local delta = input.Position - dragStartBtn
         toggleMenuBtn.Position = UDim2.new(
